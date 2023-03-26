@@ -38,7 +38,7 @@ const NoConversationSelected: React.FunctionComponent<NoConversationSelectedProp
               <BiMessageSquareDots fontSize={90} />
             ) : (
                 <>
-                <ConversationModal isOpen={isOpen} onClose={onClose} session={session} />
+                <ConversationModal isOpen={isOpen} onClose={onClose} session={session}  conversations={conversations}/>
                 <Button bg="brand.100" onClick={openModal}>
                     Create Conversation
                 </Button>

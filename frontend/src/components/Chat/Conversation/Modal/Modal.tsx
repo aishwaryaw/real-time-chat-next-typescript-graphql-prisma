@@ -27,20 +27,26 @@ import { toast } from "react-hot-toast";
 import Participants from "./Participants";
 import { Session } from "next-auth";
 import { useRouter } from "next/router";
-import { ConversationPopulated, ParticipantPopulated } from "../../../../../../backend/src/utils/types";
+import {
+  ConversationPopulated,
+  ParticipantPopulated,
+} from "../../../../../../backend/src/utils/types";
 import ConversationItem from "../ConversationItem";
 
 interface ModalProps {
   isOpen: boolean;
   onClose: () => void;
   session: Session;
-  editingConversation: ConversationPopulated | null;
-  onViewConversation: (
+  editingConversation?: ConversationPopulated | null;
+  onViewConversation?: (
     conversationId: string,
     hasSeenLatestMessage: boolean
   ) => void;
   conversations: Array<ConversationPopulated>;
-  getUserParticipantObject: (conversation:ConversationPopulated) => ParticipantPopulated;
+  getUserParticipantObject?: (
+    conversation: ConversationPopulated
+  ) => ParticipantPopulated;
+  leavingConversation?: ConversationPopulated | null;
 }
 const ConversationModal: React.FC<ModalProps> = ({
   isOpen,
@@ -49,7 +55,8 @@ const ConversationModal: React.FC<ModalProps> = ({
   editingConversation,
   onViewConversation,
   conversations,
-  getUserParticipantObject
+  getUserParticipantObject,
+  leavingConversation,
 }) => {
   const rounter = useRouter();
   const [username, setUsername] = useState("");
@@ -73,14 +80,19 @@ const ConversationModal: React.FC<ModalProps> = ({
   const [searchedUsersData, setSearchedUsersData] =
     useState<SearchUsersData | null>(null);
 
-    
-  const [updateParticipants, {loading: updateParticipantsLoading}] = 
-  useMutation<{updateParticipants: boolean}, updateParticipantsVariables>(conversationOperations.Mutations.updateParticipants);
+  const [updateParticipants, { loading: updateParticipantsLoading }] =
+    useMutation<{ updateParticipants: boolean }, updateParticipantsVariables>(
+      conversationOperations.Mutations.updateParticipants
+    );
 
   const [createConversation, { loading: createConversationLoading }] =
     useMutation<createConversationData, createConversationVariables>(
       conversationOperations.Mutations.createConversation
     );
+  const [modifyAdmin, { loading: modifyAdminLoading }] = useMutation<
+    { modifyAdmin: boolean },
+    { conversationId: string; userId: string }
+  >(conversationOperations.Mutations.modifyAdmin);
 
   const onSearch = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -112,6 +124,45 @@ const ConversationModal: React.FC<ModalProps> = ({
     setParticipants((prev) => prev.filter((p) => p.id != id));
   };
 
+  const leaveConversation = async (participantId: string) => {
+    if (leavingConversation) {
+      try {
+        const { data, errors } = await modifyAdmin({
+          variables: {
+            conversationId: leavingConversation.id,
+            userId: participantId,
+          },
+        });
+
+        if (!data?.modifyAdmin || errors) {
+          throw new Error("modify admin error");
+        } else {
+          const participantIds = leavingConversation.participants
+            .filter((participant) => participant.user.id !== userId)
+            .map((p) => p.user.id);
+          try {
+            const { data, errors } = await updateParticipants({
+              variables: {
+                conversationId: leavingConversation.id,
+                participantIds,
+              },
+            });
+            if (!data || errors) {
+              throw new Error("Failed to update participants");
+            }
+          } catch (error: any) {
+            console.log("onUpdateConversation error", error);
+            toast.error(error?.message);
+          }
+        }
+      } catch (error: any) {
+        console.log("Modify admin error", error);
+        toast.error(error.message);
+      }
+      onClose();
+    }
+  };
+
   /**
    * Verifies that a conversation with selected
    * participants does not already exist
@@ -120,7 +171,7 @@ const ConversationModal: React.FC<ModalProps> = ({
     participantIds: string[]
   ): ConversationPopulated | null => {
     let existingConversation: ConversationPopulated | null = null;
-
+    if (!conversations.length) return null;
     for (const conversation of conversations) {
       const addedParticipants = conversation.participants.filter(
         (p) => p.user.id !== userId
@@ -202,61 +253,78 @@ const ConversationModal: React.FC<ModalProps> = ({
 
   const onUpdateConversation = async (conversation: ConversationPopulated) => {
     try {
-    const {data, errors} = await updateParticipants({
-      variables:{
-        conversationId: conversation.id,
-        participantIds: participants.map(participant => participant.id)
+      if (conversation.admin.id === session.user.id) {
+        const { data, errors } = await updateParticipants({
+          variables: {
+            conversationId: conversation.id,
+            participantIds: [
+              userId,
+              ...participants.map((participant) => participant.id),
+            ],
+          },
+        });
+        if (!data?.updateParticipants || errors) {
+          throw new Error("Failed to update participants");
+        }
+        /**
+         * Clear state and close modal
+         * on successful update
+         */
+        setParticipants([]);
+        setUsername("");
+        onClose();
+      } else {
+        throw new Error("Conversation can not be edited");
       }
-    });
-    if(!data?.updateParticipants || errors){
-      throw new Error('Failed to update participants');
+    } catch (error: any) {
+      console.log("onUpdateConversation error", error);
+      toast.error("Failed to update participants");
     }
-     /**
-       * Clear state and close modal
-       * on successful update
-      */
-     setParticipants([]);
-     setUsername("");
-     onClose();
-  }
-  catch(error:any){
-    console.log("onUpdateConversation error", error);
-    toast.error("Failed to update participants");
-  }
-  }
+  };
 
   const onConversationClick = () => {
-    if(!existingConversation) return;
-
-    const {hasSeenLatestMessage} = getUserParticipantObject(existingConversation);
-    onViewConversation(existingConversation.id, !hasSeenLatestMessage);
-    onClose();
-  }
+    if (!existingConversation) return;
+    if (getUserParticipantObject && onViewConversation) {
+      const { hasSeenLatestMessage } =
+        getUserParticipantObject(existingConversation);
+      onViewConversation(existingConversation.id, !hasSeenLatestMessage);
+      onClose();
+    } else return;
+  };
 
   /**
-  * If a conversation is being edited,
-  * update participant state to be that
-  * conversations' participants
-  */
-  useEffect(()=> {
-    if(editingConversation){
-      setParticipants(editingConversation.participants.map(p=> p.user as searchedUser));
+   * If a conversation is being edited,
+   * update participant state to be that
+   * conversations' participants
+   */
+  useEffect(() => {
+    if (editingConversation) {
+      setParticipants(
+        editingConversation.participants
+          .filter((participant) => participant.user.id !== userId)
+          .map((p) => p.user as searchedUser)
+      );
       return;
     }
-  }, [editingConversation]);
+    if (leavingConversation) {
+      setParticipants(
+        leavingConversation.participants.map((p) => p.user as searchedUser)
+      );
+      return;
+    }
+  }, [editingConversation, leavingConversation, userId]);
 
- /**
+  /**
    * Reset existing conversation state
    * when participants added/removed
    */
-  useEffect(()=> {
+  useEffect(() => {
     setExistingConversation(null);
   }, [participants]);
 
-
   /**
    * Clear participant state if closed
-  */
+   */
   useEffect(() => {
     if (!isOpen) {
       setParticipants([]);
@@ -265,7 +333,27 @@ const ConversationModal: React.FC<ModalProps> = ({
     }
   }, [isOpen]);
 
-  return (
+  return leavingConversation ? (
+    <Modal isOpen={isOpen} onClose={onClose}>
+      <ModalOverlay />
+      <ModalContent bg="#2d2d2d" pb={4}>
+        <ModalHeader>Select admin</ModalHeader>
+        <ModalCloseButton />
+        <ModalBody>
+          {participants.length > 0 && (
+            <>
+              <Participants
+                participants={participants.filter(
+                  (participant) => participant.id !== userId
+                )}
+                selectAsAdmin={leaveConversation}
+              />
+            </>
+          )}
+        </ModalBody>
+      </ModalContent>
+    </Modal>
+  ) : (
     <Modal isOpen={isOpen} onClose={onClose}>
       <ModalOverlay />
       <ModalContent bg="#2d2d2d" pb={4}>
@@ -299,17 +387,17 @@ const ConversationModal: React.FC<ModalProps> = ({
               <Participants
                 participants={participants}
                 removeParticipant={removeParticipant}
-              /> 
+              />
               <Box mt={4}>
-              {existingConversation && (
-                <ConversationItem
-                key={existingConversation.id}
-                userId={userId}
-                conversation={existingConversation}
-                onClick={()=> onConversationClick()}
-                />
-              )}
-               </Box>
+                {existingConversation && (
+                  <ConversationItem
+                    key={existingConversation.id}
+                    userId={userId}
+                    conversation={existingConversation}
+                    onClick={() => onConversationClick()}
+                  />
+                )}
+              </Box>
               <Button
                 mt={4}
                 bg="brand.100"

@@ -9,6 +9,7 @@ const typeDefs = gql`
     }
     type Conversation {
         id: String
+        admin: User
         latestMessage: Message
         participants: [Participant]
         updatedAt: Date
@@ -43,6 +44,9 @@ const typeDefs = gql`
     }
     type Mutation {
         updateParticipants(conversationId: String, participantIds: [String]): Boolean
+    }
+    type Mutation {
+        modifyAdmin(conversationId: String, userId: String) : Boolean
     }
     type Subscription {
         conversationCreated : Conversation

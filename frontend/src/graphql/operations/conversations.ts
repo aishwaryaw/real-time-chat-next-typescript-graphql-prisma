@@ -16,6 +16,10 @@ const conversationFields = `
     latestMessage {
        ${messsageFields}
     }
+    admin {
+        id
+        username
+    }
 `;
 
 export default {
@@ -49,6 +53,11 @@ export default {
         updateParticipants: gql`
         mutation UpdateParticipants($conversationId: String!, $participantIds:[String]!){
             updateParticipants(conversationId: $conversationId, participantIds: $participantIds)
+        }
+        `,
+        modifyAdmin: gql`
+        mutation ModifyAdmin($conversationId: String!, $userId: String!){
+            modifyAdmin(conversationId: $conversationId, userId: $userId)
         }
         `
     },

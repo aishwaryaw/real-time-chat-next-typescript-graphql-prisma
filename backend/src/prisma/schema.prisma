@@ -45,6 +45,7 @@ model User {
   message       Message[]
   accounts      Account[]
   sessions      Session[]
+  conversation  Conversation[]
 }
 
 model VerificationToken {
@@ -62,6 +63,8 @@ model Conversation {
   messages         Message[] @relation("conversationMessages")
   latestMessage    Message?  @relation("latestConversationMessage", fields: [latestMessageId], references: [id], onUpdate: NoAction, onDelete: NoAction)
   latestMessageId  String?   @unique  @db.ObjectId
+  admin            User      @relation(fields: [adminId], references: [id])
+  adminId          String    @db.ObjectId
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 }

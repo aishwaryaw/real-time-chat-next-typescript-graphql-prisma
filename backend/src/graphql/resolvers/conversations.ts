@@ -42,6 +42,7 @@ const resolvers = {
           },
           include: conversationPopulated,
         });
+
         return conversations;
       } catch (error: any) {
         console.log("conversations error", error);
@@ -79,7 +80,8 @@ const resolvers = {
 
         const existingConversations = userConversations.filter(
           (conversation) => {
-            return participantIds.every((participantId) =>
+            return conversation.participants.length == participantIds.length && 
+             participantIds.every((participantId) =>
               conversation.participants
                 .map((participant) => participant.userId)
                 .includes(participantId)
@@ -92,6 +94,7 @@ const resolvers = {
         }
         const conversation = await prisma.conversation.create({
           data: {
+            adminId: userId,
             participants: {
               createMany: {
                 data: participantIds.map((id) => ({
@@ -212,6 +215,16 @@ const resolvers = {
       const { conversationId, participantIds } = args;
 
       try {
+        // const conversation = await prisma.conversation.findUnique({
+        //   where: {
+        //     id: conversationId
+        //   }
+        // });
+
+        // if(conversation?.adminId !== userId) {
+        //   throw new GraphQLError('Conversation can only be updated by admin');
+        // }
+
         const participants = await prisma.conversationParticipant.findMany({
           where: {
             conversationId
@@ -280,6 +293,44 @@ const resolvers = {
         throw new GraphQLError(error?.message);
       }
 
+    },
+
+    modifyAdmin: async (
+      _: any,
+      args: { conversationId: string, userId: string },
+      context: GraphQLContext
+    ): Promise<boolean> => {
+      const { session, prisma, pubsub } = context;
+      const { conversationId, userId } = args;
+
+      if (!session?.user) {
+        throw new GraphQLError("Not authorized");
+      }
+
+      try {
+       const conversation = await prisma.conversation.update({
+          where: {
+            id: conversationId
+          },
+          data: {
+            adminId: userId
+          },
+          include: conversationPopulated
+        });
+        pubsub.publish('CONVERSATION_UPDATED', {
+          conversationUpdated: {
+            conversation,
+             addedUserIds: [],
+             removedUserIds: []
+          }
+        });
+        return true;
+      }
+
+      catch(error:any){
+        console.log("conversations error", error);
+        throw new GraphQLError(error?.message);
+      }
     }
   },
   Subscription: {
@@ -387,6 +438,12 @@ export const participantsPopulated =
 
 export const conversationPopulated =
   Prisma.validator<Prisma.ConversationInclude>()({
+    admin: {
+      select : {
+        id: true,
+        username: true
+      }
+    },
     latestMessage: {
       include: {
         sender: {

@@ -30,11 +30,12 @@ const ConversationList: React.FunctionComponent<IConversationListProps> = ({
   onViewConversation,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const [editingConversation, setEditingConverdation] = useState<ConversationPopulated|null>(null);
+  const [editingConversation, setEditingConversation] = useState<ConversationPopulated|null>(null);
   const openModal = () => setIsOpen(true);
   const onClose = () => setIsOpen(false);
   const router = useRouter();
   const { id: userId } = session.user;
+  const [leavingConversation, setLeavingConversation] = useState<ConversationPopulated | null>(null);
 
   const [updateParticipants, {loading: updateParticipantsLoading}] = 
   useMutation<{updateParticipants: boolean}, updateParticipantsVariables>
@@ -52,11 +53,16 @@ const ConversationList: React.FunctionComponent<IConversationListProps> = ({
 
 
   const onEditConversation = (conversation:ConversationPopulated) => {
-    setEditingConverdation(conversation);
+    setEditingConversation(conversation);
     openModal();
   }
 
   const onLeaveConversation = async(conversation: ConversationPopulated) => {
+    if(conversation.admin.id === userId){
+      openModal();
+      setLeavingConversation(conversation);
+    }
+    else {
     const participantIds = conversation.participants
     .filter(participant => participant.user.id !== userId)
     .map(p => p.user.id);
@@ -77,9 +83,11 @@ const ConversationList: React.FunctionComponent<IConversationListProps> = ({
     toast.error(error?.message);
   }
   }
+}
 
   const onToggleClose = () => {
-    setEditingConverdation(null);
+    setEditingConversation(null);
+    setLeavingConversation(null);
     onClose();
   }
 
@@ -141,6 +149,7 @@ const ConversationList: React.FunctionComponent<IConversationListProps> = ({
       onViewConversation = {onViewConversation}
       conversations = {conversations}
       getUserParticipantObject= {getUserParticipantObject}
+      leavingConversation = {leavingConversation}
       />
       {sortedConversations.map((conversation) => {
         const participant = conversation.participants.find(

@@ -77,15 +77,21 @@ const ConversationItem: React.FC<ConversationItemProps> = ({
       {showMenu && (
       <Menu isOpen={menuOpen} onClose={() => setMenuOpen(false)}>
         <MenuList bg="#2d2d2d">
-          <MenuItem
+         
+         {conversation.admin.id === userId ? (
+         <MenuItem
             icon={<AiOutlineEdit fontSize={20} />}
             onClick={(event) => {
               event.stopPropagation();
               onEditConversation(conversation);
             }}
+            bg="#2d2d2d"
+            _hover={{ bg: "whiteAlpha.300" }}
           >
             Edit
           </MenuItem>
+          ) : null }
+         
           {conversation.participants.length > 2 ? (
             <MenuItem
               icon={<BiLogOut fontSize={20} />}
@@ -93,20 +99,25 @@ const ConversationItem: React.FC<ConversationItemProps> = ({
                 event.stopPropagation();
                 onLeaveConversation(conversation);
               }}
+              bg="#2d2d2d"
+              _hover={{ bg: "whiteAlpha.300" }}
             >
               Leave
             </MenuItem>
-          ) : (
-            <MenuItem
+          ) :
+         ( 
+           <MenuItem
               icon={<MdDeleteOutline fontSize={20} />}
               onClick={(event) => {
                 event.stopPropagation();
                 onDeleteConversation(conversation.id);
               }}
+              bg="#2d2d2d"
+              _hover={{ bg: "whiteAlpha.300" }}
             >
               Delete
-            </MenuItem>
-          )}
+            </MenuItem> )
+          }
         </MenuList>
       </Menu>
       )}
